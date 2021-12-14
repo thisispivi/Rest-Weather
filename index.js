@@ -1,3 +1,4 @@
+const jwt = require('jsonwebtoken')
 const express = require('express');
 const cors = require('cors');
 const rp = require('request-promise');
@@ -8,6 +9,38 @@ const body_parser = require("body-parser");
 app.use(body_parser.urlencoded({ extended: false }));
 app.use(cors());
 var json_parser = body_parser.json();
+var JwtStrategy = require('passport-jwt').Strategy,
+    ExtractJwt = require('passport-jwt').ExtractJwt;
+const passport = require('passport');
+var crypto = require('crypto');
+const mongoose = require("mongoose");
+const MONGODB_URL = "mongodb://localhost:27017/cache";
+mongoose.connect(
+    MONGODB_URL, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true
+    }
+);
+const secret_key = 'de3546d0a3aa8be473415dca2455c046104a3d94fa42cf3ef36b5b96c444c91beef37eb8e35f829e6a88703557ea15666a0510a38ca8cc4d9061903a1536d6e3';
+app.use(passport.initialize());
+
+const user_schema = new mongoose.Schema({
+    _id: Number,
+    username: String,
+    password: String,
+    token: String
+});
+
+const User = mongoose.model('users', user_schema);
+
+
+const counter_schema = new mongoose.Schema({
+    _id: String,
+    seq: Number
+});
+
+const Counter = mongoose.model('counters', counter_schema);
+
 
 
 // Variables
@@ -22,6 +55,28 @@ app.listen(port, () => {
 });
 
 
+
+
+
+// Passport
+var opts = {}
+opts.jwtFromRequest = ExtractJwt.fromAuthHeaderAsBearerToken();
+opts.secretOrKey = secret_key;
+passport.use(new JwtStrategy(opts, function(jwt_payload, done) {
+    User.findOne({ id: jwt_payload.sub }, function(err, user) {
+        if (err) {
+            return done(err, false);
+        }
+        if (user) {
+            return done(null, user);
+        } else {
+            return done(null, false);
+        }
+    });
+}));
+
+
+// Locations
 /**
  * Insert a new location in the mongodb database
  * @param {MongoClient} client 
@@ -35,7 +90,7 @@ async function insertLocation(client, data) {
         var result = await locations.updateOne({ "location": new RegExp(data.location, "i") }, {
             $push: { data: { $each: data.data, $position: 0 } }
         });
-        console.log('A document was inserted with the _id: ' + result.insertedId);
+        console.log('A document was inserted');
     } catch (e) {
         console.error(e);
     } finally {
@@ -55,7 +110,7 @@ async function createLocation(client, data) {
         const database = client.db("cache");
         const locations = database.collection("locations");
         const result = await locations.insertOne(data);
-        console.log('A document was inserted with the _id: ' + result.insertedId);
+        console.log('A document was inserted');
     } catch (e) {
         console.error(e);
     } finally {
@@ -303,8 +358,102 @@ function filter(data) {
 }
 
 
+
+
+
+// Authentication
+
+/**
+ * Return the next id of the counter collection
+ * @param {MongoClient} client 
+ * @param {String} name name of the _id field
+ * @returns The incremental id
+ */
+async function getNextSequence(name) {
+    try {
+        var id = await Counter.findOneAndUpdate({ _id: name }, { $inc: { seq: 1 } });
+        return id.seq;
+    } catch (e) {
+        console.error(e);
+    } finally {
+        await client.close();
+    }
+}
+
+
+/**
+ * Check if the user already exists
+ * @param {String} username 
+ * @returns {boolean} True if the user exists false otherwise
+ */
+async function userExist(username) {
+    try {
+        var result = await User.findOne({ "username": username });
+        if (result == null) {
+            return false;
+        }
+        return true;;
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+
+/**
+ * Create the sha265 of the password
+ * @param {String} password 
+ * @returns 
+ */
+function generateSha(password) {
+    return crypto.createHash('sha256').update(password).digest('hex');
+}
+
+
+/**
+ * Insert new user in the database
+ * @param {JSON} user User data
+ * @returns {String} a message if the user has been inserted
+ */
+async function insertNewUser(user) {
+    try {
+        var new_user = new User(user);
+        new_user.save(function(err, user) {
+            if (err) return console.error(err);
+            console.log(user.name);
+        });
+        return "User inserted";
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+
+/**
+ * Check if the user already exists and if the password is correct
+ * @param {String} username 
+ * @param {String} password 
+ * @returns {boolean} True if the user exists and the password is correct false otherwise
+ */
+async function isPasswordRight(username, password) {
+    try {
+        var result = await User.findOne({ "username": username, "password": password });
+        if (result == null) {
+            return false;
+        }
+        return true;;
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+
+
+
+
+// Endpoints
+
 // Get the weather of a particular location
-app.get('/weather/:location', (req, res) => {
+app.get('/weather/:location', passport.authenticate('jwt', { session: false }), (req, res) => {
     try {
         location = req.params.location;
         console.log("\nGetting the weather of: " + location);
@@ -330,7 +479,7 @@ app.get('/weather/:location', (req, res) => {
 
 
 // Get all documents from cache
-app.get('/', (req, res) => {
+app.get('/', passport.authenticate('jwt', { session: false }), (req, res) => {
     try {
         console.log("\nGet Request");
         getAll(client).then(function(result) {
@@ -343,7 +492,7 @@ app.get('/', (req, res) => {
 
 
 // Get single location from cache
-app.get('/get-single/:location', (req, res) => {
+app.get('/get-single/:location', passport.authenticate('jwt', { session: false }), (req, res) => {
     try {
         location = req.params.location;
         console.log("\nGet Single Request: " + location);
@@ -357,7 +506,7 @@ app.get('/get-single/:location', (req, res) => {
 
 
 // Create a new document in the cache
-app.post('/', json_parser, (req, res) => {
+app.post('/', passport.authenticate('jwt', { session: false }), json_parser, (req, res) => {
     try {
         location = String(req.body.location);
         message = req.body;
@@ -380,7 +529,7 @@ app.post('/', json_parser, (req, res) => {
 
 
 // Delete a location from cache
-app.delete('/', json_parser, (req, res) => {
+app.delete('/', passport.authenticate('jwt', { session: false }), json_parser, (req, res) => {
     try {
         console.log("\nDelete: " + req.body.location);
         location = String(req.body.location);
@@ -393,7 +542,7 @@ app.delete('/', json_parser, (req, res) => {
 
 
 // Update a location
-app.put('/', json_parser, (req, res) => {
+app.put('/', passport.authenticate('jwt', { session: false }), json_parser, (req, res) => {
     try {
         data = req.body;
         if (req.body.location == null) {
@@ -412,3 +561,64 @@ app.put('/', json_parser, (req, res) => {
         res.send({ "status": false, "message": e });
     }
 });
+
+
+// Register
+app.post('/register', json_parser, (req, res) => {
+    try {
+        data = req.body;
+        console.log("Creating user");
+        userExist(data.username).then(result => {
+            if (!result) {
+                getNextSequence("user_id").then(auto_id => {
+                    var username = data.username;
+                    var token = jwt.sign({ username }, secret_key, { expiresIn: 1000000, });
+                    var user = {
+                        "_id": auto_id,
+                        "username": username,
+                        "password": generateSha(data.password + ""),
+                        "token": token
+                    };
+                    insertNewUser(user).then(data => {
+                        console.log("User inserted");
+                        res.send(token);
+                    })
+                });
+            } else {
+                console.log("User already inserted");
+                res.send("User already inserted");
+            }
+        });
+    } catch (e) {
+        res.status(404).send(e);
+    }
+});
+
+
+// Login
+app.post('/login', json_parser, function(req, res) {
+    try {
+        const usr = req.body.username;
+        const psw = req.body.password + "";
+        userExist(usr).then(result => {
+            if (result) {
+                isPasswordRight(usr, psw).then(right => {
+                    if (right) {
+                        var token = jwt.sign({ usr }, secret_key, { expiresIn: 1000000, });
+                        res.send(token);
+                    } else {
+                        res.status(404).send("Wrong Password");
+                    }
+                })
+            } else {
+                res.status(404).send("Username not found");
+            }
+        })
+
+    } catch (e) {
+        res.status(404).send(e);
+    }
+});
+
+
+// Update
