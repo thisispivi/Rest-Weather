@@ -7,7 +7,11 @@ var client = new MongoClient('mongodb://localhost:27017');
 const app = express();
 const body_parser = require("body-parser");
 app.use(body_parser.urlencoded({ extended: false }));
-app.use(cors());
+const corsConfig = {
+    credentials: true,
+    origin: true,
+};
+app.use(cors(corsConfig));
 var json_parser = body_parser.json();
 var JwtStrategy = require('passport-jwt').Strategy,
     ExtractJwt = require('passport-jwt').ExtractJwt;
@@ -15,6 +19,7 @@ const passport = require('passport');
 var crypto = require('crypto');
 const mongoose = require("mongoose");
 const MONGODB_URL = "mongodb://localhost:27017/cache";
+var cookieParser = require('cookie-parser');
 mongoose.connect(
     MONGODB_URL, {
         useNewUrlParser: true,
@@ -23,7 +28,7 @@ mongoose.connect(
 );
 const secret_key = 'de3546d0a3aa8be473415dca2455c046104a3d94fa42cf3ef36b5b96c444c91beef37eb8e35f829e6a88703557ea15666a0510a38ca8cc4d9061903a1536d6e3';
 app.use(passport.initialize());
-
+app.use(cookieParser());
 const user_schema = new mongoose.Schema({
     _id: Number,
     username: String,
@@ -59,8 +64,17 @@ app.listen(port, () => {
 
 
 // Passport
+
+var cookieExtractor = function(req) {
+    var token = null;
+    if (req && req.cookies) {
+        token = req.cookies['jwt'];
+    }
+    return token;
+};
+
 var opts = {}
-opts.jwtFromRequest = ExtractJwt.fromAuthHeaderAsBearerToken();
+opts.jwtFromRequest = cookieExtractor;
 opts.secretOrKey = secret_key;
 passport.use(new JwtStrategy(opts, function(jwt_payload, done) {
     User.findOne({ id: jwt_payload.sub }, function(err, user) {
@@ -402,10 +416,19 @@ async function userExist(username) {
 /**
  * Create the sha265 of the password
  * @param {String} password 
- * @returns 
+ * @returns {string} The sha 256 of the password
  */
 function generateSha(password) {
     return crypto.createHash('sha256').update(password).digest('hex');
+}
+
+
+/**
+ * Create the token
+ * @returns {String} The token
+ */
+function generateToken() {
+    return crypto.randomBytes(64).toString('base64url');
 }
 
 
@@ -441,6 +464,36 @@ async function isPasswordRight(username, password) {
             return false;
         }
         return true;;
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+
+/**
+ * Edit an user
+ * @param {Number} id The id of the user
+ * @param {String} username The new username
+ * @param {String} password The new password
+ * @returns The status
+ */
+async function editUser(id, username, password) {
+    try {
+        return User.findOneAndUpdate({ "_id": id }, { "username": username, "password": password })
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+
+/**
+ * Delete user
+ * @param {Number} id The id of the suer
+ * @returns The status
+ */
+async function deleteUser(id) {
+    try {
+        return User.deleteOne({ "_id": id })
     } catch (e) {
         console.error(e);
     }
@@ -577,11 +630,14 @@ app.post('/register', json_parser, (req, res) => {
                         "_id": auto_id,
                         "username": username,
                         "password": generateSha(data.password + ""),
-                        "token": token
+                        "token": generateToken()
                     };
                     insertNewUser(user).then(data => {
                         console.log("User inserted");
-                        res.send(token);
+                        res.send({
+                            "access_token": token,
+                            "expires_in": 1000000
+                        });
                     })
                 });
             } else {
@@ -605,7 +661,10 @@ app.post('/login', json_parser, function(req, res) {
                 isPasswordRight(usr, psw).then(right => {
                     if (right) {
                         var token = jwt.sign({ usr }, secret_key, { expiresIn: 1000000, });
-                        res.send(token);
+                        res.send({
+                            "access_token": token,
+                            "expires_in": 1000000
+                        });
                     } else {
                         res.status(404).send("Wrong Password");
                     }
@@ -622,3 +681,34 @@ app.post('/login', json_parser, function(req, res) {
 
 
 // Update
+app.post('/update', passport.authenticate('jwt', { session: false }), json_parser, function(req, res) {
+    try {
+        const id = req.body._id;
+        const usr = req.body.username;
+        const psw = req.body.password + "";
+        userExist(usr).then(result => {
+            if (!result) {
+                editUser(id, usr, psw).then(end => {
+                    res.send(end);
+                })
+            } else {
+                res.send("Username already taken");
+            }
+        })
+    } catch (e) {
+        res.status(404).send(e);
+    }
+});
+
+
+// Delete
+app.post('/delete', passport.authenticate('jwt', { session: false }), json_parser, function(req, res) {
+    try {
+        const id = req.body._id;
+        deleteUser(id).then(result => {
+            res.send(result);
+        })
+    } catch (e) {
+        res.status(404).send(e);
+    }
+});
