@@ -665,8 +665,8 @@ app.post('/register', json_parser, (req, res) => {
 app.post('/login', json_parser, function (req, res) {
     try {
         const usr = req.body.username;
-        const psw = req.body.password + "";
-        console.log("\nUser Login: "+username);
+        const psw = req.body.password;
+        console.log("\nUser Login");
         userExist(usr).then(result => {
             if (result != null) {
                 isPasswordRight(usr, psw).then(right => {
@@ -699,7 +699,7 @@ app.put('/update', passport.authenticate('jwt', { session: false }), json_parser
         const id = req.body._id;
         const usr = req.body.username;
         const psw = req.body.password + "";
-        console.log("\nUpdate user: "+username);
+        console.log("\nUpdate user");
         editUser(id, usr, psw).then(end => {
             var token = jwt.sign({ usr }, secret_key, { expiresIn: 1000000, });
             console.log("Success")
@@ -730,10 +730,10 @@ app.delete('/delete', passport.authenticate('jwt', { session: false }), json_par
 
 
 // Get user data
-app.get('/get_user/:username', passport.authenticate('jwt', { session: false }),json_parser, function (req, res) {
+app.get('/get_user/:username', passport.authenticate('jwt', { session: false }), json_parser, function (req, res) {
     try {
         const username = req.params.username;
-        console.log("\nGet data of user: "+username);
+        console.log("\nGet data of single user");
         userExist(username).then(result => {
             if (result != null) {
                 res.send(result);
