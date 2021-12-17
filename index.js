@@ -748,3 +748,24 @@ app.get('/get_user/:username', passport.authenticate('jwt', { session: false }),
         res.send(e);
     }
 });
+
+
+// Check username
+app.get('/check_username/:username', json_parser, function (req, res) {
+    try {
+        const username = req.params.username;
+        console.log("\nCheck username");
+        userExist(username).then(result => {
+            if (result == null) {
+                res.send({"message": "No user found"});
+                console.log("No user found");
+            }
+            else {
+                console.log("User found");
+                res.send({ "error": "User found" });
+            }
+        })
+    } catch (e) {
+        res.send(e);
+    }
+});
