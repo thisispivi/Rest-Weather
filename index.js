@@ -23,9 +23,9 @@ var cookieParser = require('cookie-parser');
 const { reset } = require('nodemon');
 mongoose.connect(
     MONGODB_URL, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-}
+        useNewUrlParser: true,
+        useUnifiedTopology: true
+    }
 );
 const secret_key = 'de3546d0a3aa8be473415dca2455c046104a3d94fa42cf3ef36b5b96c444c91beef37eb8e35f829e6a88703557ea15666a0510a38ca8cc4d9061903a1536d6e3';
 app.use(passport.initialize());
@@ -75,7 +75,7 @@ app.listen(port, () => {
 
 
 // Passport
-var cookieExtractor = function (req) {
+var cookieExtractor = function(req) {
     var token = null;
     if (req && req.cookies) {
         token = req.cookies['jwt'];
@@ -86,8 +86,8 @@ var cookieExtractor = function (req) {
 var opts = {}
 opts.jwtFromRequest = cookieExtractor;
 opts.secretOrKey = secret_key;
-passport.use(new JwtStrategy(opts, function (jwt_payload, done) {
-    User.findOne({ id: jwt_payload.sub }, function (err, user) {
+passport.use(new JwtStrategy(opts, function(jwt_payload, done) {
+    User.findOne({ id: jwt_payload.sub }, function(err, user) {
         if (err) {
             return done(err, false);
         }
@@ -159,26 +159,26 @@ async function checkLocationMinutes(client, location, minutes) {
         // First compute the difference between the time and the time of the entry
         // Then take the entry of the database that has been added less than 15 minutes ago and that matches the location
         const pipeline = [{
-            $project: {
-                location: 1,
-                temp: { $first: "$data.temp" },
-                humidity: { $first: "$data.humidity" },
-                wind: { $first: "$data.wind" },
-                pressure: { $first: "$data.pressure" },
-                timestamp: { $first: "$data.timestamp" }
-            }
-        },
-        {
-            $project: {
-                location: 1,
-                temp: 1,
-                humidity: 1,
-                wind: 1,
-                pressure: 1,
-                timestamp: { $divide: [{ $subtract: [time, "$timestamp"] }, 60000] }
-            }
-        },
-        { $match: { "location": new RegExp(location, "ig"), "timestamp": { $lt: minutes } } }
+                $project: {
+                    location: 1,
+                    temp: { $first: "$data.temp" },
+                    humidity: { $first: "$data.humidity" },
+                    wind: { $first: "$data.wind" },
+                    pressure: { $first: "$data.pressure" },
+                    timestamp: { $first: "$data.timestamp" }
+                }
+            },
+            {
+                $project: {
+                    location: 1,
+                    temp: 1,
+                    humidity: 1,
+                    wind: 1,
+                    pressure: 1,
+                    timestamp: { $divide: [{ $subtract: [time, "$timestamp"] }, 60000] }
+                }
+            },
+            { $match: { "location": new RegExp(location, "ig"), "timestamp": { $lt: minutes } } }
         ];
         const agg = locations.aggregate(pipeline);
         var result = null;
@@ -446,7 +446,7 @@ function generateToken() {
 async function insertNewUser(user) {
     try {
         var new_user = new User(user);
-        new_user.save(function (err, user) {
+        new_user.save(function(err, user) {
             if (err) return console.error(err);
             console.log(user.name);
         });
@@ -520,9 +520,9 @@ app.get('/weather/:location', passport.authenticate('jwt', { session: false }), 
         // Else delete an antry of the specified location (if there is one) and create a new one
         rp('https://api.openweathermap.org/data/2.5/weather?q=' + location + '&appid=' + appid, { json: true }).then(body => {
             location = body.name;
-            checkLocationMinutes(client, location, minutes).then(function (result) {
+            checkLocationMinutes(client, location, minutes).then(function(result) {
                 client = new MongoClient('mongodb://localhost:27017');
-                checkLocation(client, location).then(function (r) {
+                checkLocation(client, location).then(function(r) {
                     if (result != null) {
                         res.send(filter(result));
                     } else {
@@ -541,7 +541,7 @@ app.get('/weather/:location', passport.authenticate('jwt', { session: false }), 
 app.get('/', passport.authenticate('jwt', { session: false }), (req, res) => {
     try {
         console.log("\nGet Request");
-        getAll(client).then(function (result) {
+        getAll(client).then(function(result) {
             res.send(result);
         });
     } catch (e) {
@@ -555,7 +555,7 @@ app.get('/get-single/:location', passport.authenticate('jwt', { session: false }
     try {
         location = req.params.location;
         console.log("\nGet Single Request: " + location);
-        getSingle(client, location).then(function (result) {
+        getSingle(client, location).then(function(result) {
             res.send(result);
         });
     } catch (e) {
@@ -570,9 +570,9 @@ app.post('/', passport.authenticate('jwt', { session: false }), json_parser, (re
         console.log("\nCreating new document")
         location = String(req.body.location);
         message = req.body;
-        checkLocationMinutes(client, location, minutes).then(function (result) {
+        checkLocationMinutes(client, location, minutes).then(function(result) {
             client = new MongoClient('mongodb://localhost:27017');
-            checkLocation(client, location).then(function (r) {
+            checkLocation(client, location).then(function(r) {
                 if (result != null) {
                     console.log("Wait 15 min to update")
                     res.send({ "status": 1, "message": filter(result) });
@@ -612,7 +612,7 @@ app.put('/', passport.authenticate('jwt', { session: false }), json_parser, (req
             throw "No location inserted";
         }
         console.log("\nUpdating city: " + data.location);
-        checkLocation(client, req.body.location).then(function (result) {
+        checkLocation(client, req.body.location).then(function(result) {
             if (result != null) {
                 client = new MongoClient('mongodb://localhost:27017');
                 var status = updateLocation(client, data);
@@ -627,7 +627,7 @@ app.put('/', passport.authenticate('jwt', { session: false }), json_parser, (req
 
 
 // Register
-app.post('/register', json_parser, (req, res) => {
+app.post('/signup', json_parser, (req, res) => {
     try {
         data = req.body;
         console.log("\nCreating user");
@@ -662,7 +662,7 @@ app.post('/register', json_parser, (req, res) => {
 
 
 // Login
-app.post('/login', json_parser, function (req, res) {
+app.post('/login', json_parser, function(req, res) {
     try {
         const usr = req.body.username;
         const psw = req.body.password;
@@ -694,7 +694,7 @@ app.post('/login', json_parser, function (req, res) {
 
 
 // Update user
-app.put('/update', passport.authenticate('jwt', { session: false }), json_parser, function (req, res) {
+app.put('/update', passport.authenticate('jwt', { session: false }), json_parser, function(req, res) {
     try {
         const id = req.body._id;
         const usr = req.body.username;
@@ -715,7 +715,7 @@ app.put('/update', passport.authenticate('jwt', { session: false }), json_parser
 
 
 // Delete user
-app.delete('/delete', passport.authenticate('jwt', { session: false }), json_parser, function (req, res) {
+app.delete('/delete', passport.authenticate('jwt', { session: false }), json_parser, function(req, res) {
     try {
         console.log("\nDelete User");
         const id = req.body._id;
@@ -730,7 +730,7 @@ app.delete('/delete', passport.authenticate('jwt', { session: false }), json_par
 
 
 // Get user data
-app.get('/get_user/:username', passport.authenticate('jwt', { session: false }), json_parser, function (req, res) {
+app.get('/get_user/:username', passport.authenticate('jwt', { session: false }), json_parser, function(req, res) {
     try {
         const username = req.params.username;
         console.log("\nGet data of single user");
@@ -738,8 +738,7 @@ app.get('/get_user/:username', passport.authenticate('jwt', { session: false }),
             if (result != null) {
                 res.send(result);
                 console.log("Success");
-            }
-            else {
+            } else {
                 console.log("No user found");
                 res.send({ "error": "No user found" });
             }
@@ -751,16 +750,15 @@ app.get('/get_user/:username', passport.authenticate('jwt', { session: false }),
 
 
 // Check username
-app.get('/check_username/:username', json_parser, function (req, res) {
+app.get('/check_username/:username', json_parser, function(req, res) {
     try {
         const username = req.params.username;
         console.log("\nCheck username");
         userExist(username).then(result => {
             if (result == null) {
-                res.send({"message": "No user found"});
+                res.send({ "message": "No user found" });
                 console.log("No user found");
-            }
-            else {
+            } else {
                 console.log("User found");
                 res.send({ "error": "User found" });
             }
