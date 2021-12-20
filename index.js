@@ -608,9 +608,10 @@ app.delete('/', passport.authenticate('jwt', { session: false }), json_parser, (
 app.put('/', passport.authenticate('jwt', { session: false }), json_parser, (req, res) => {
     try {
         data = req.body;
-        if (req.body.location == null) {
-            throw "No location inserted";
+        if (req.body.location == null || req.body.timestamp) {
+            throw "No location or timestamp inserted";
         }
+        console.log(req.body)
         console.log("\nUpdating city: " + data.location);
         checkLocation(client, req.body.location).then(function(result) {
             if (result != null) {
