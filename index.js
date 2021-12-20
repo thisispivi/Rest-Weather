@@ -268,10 +268,20 @@ async function deleteLocation(client, location) {
  */
 async function updateLocation(client, data) {
     try {
+        const location = data.location;
+        const other = {
+            "temp": data.temp,
+            "humidity": data.humidity,
+            "wind": data.wind,
+            "pressure": data.pressure,
+            "timestamp": data.timestamp
+        }
         await client.connect();
         const database = client.db("cache");
         const locations = database.collection("locations");
-        var result = await locations.updateOne({ "location": new RegExp(data.location, "i") }, { $set: data });
+        var result = await locations.updateOne({ "location": new RegExp(location, "i"), "data": { $elemMatch: { "timestamp": other.timestamp } } }, {
+            $set: { "data.$": other }
+        });
         return result.acknowledged;
     } catch (e) {
         console.error(e);
@@ -608,10 +618,9 @@ app.delete('/', passport.authenticate('jwt', { session: false }), json_parser, (
 app.put('/', passport.authenticate('jwt', { session: false }), json_parser, (req, res) => {
     try {
         data = req.body;
-        if (req.body.location == null || req.body.timestamp) {
+        if (req.body.location == null || req.body.timestamp == null) {
             throw "No location or timestamp inserted";
         }
-        console.log(req.body)
         console.log("\nUpdating city: " + data.location);
         checkLocation(client, req.body.location).then(function(result) {
             if (result != null) {
@@ -640,7 +649,7 @@ app.post('/signup', json_parser, (req, res) => {
                     var user = {
                         "_id": auto_id,
                         "username": username,
-                        "password": generateSha(data.password + ""),
+                        "password": data.password,
                         "token": generateToken()
                     };
                     insertNewUser(user).then(data => {
